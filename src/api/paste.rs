@@ -1,6 +1,7 @@
 use axum::{Json, extract::State, http::StatusCode};
 use chrono::Utc;
 use tracing::instrument;
+use validator::Validate;
 
 use crate::{
     schema::{
@@ -19,6 +20,11 @@ pub async fn paste(
     State(state): State<AppState>,
     Json(req): Json<PasteRequest>,
 ) -> Result<(StatusCode, Json<PasteResponse>), StatusCode> {
+    req.validate().map_err(|error| {
+        tracing::warn!(%error, "validation failed");
+        StatusCode::UNPROCESSABLE_ENTITY
+    })?;
+
     let id = random_id();
     let created_at = Utc::now().timestamp();
     let expires_at = req
@@ -177,7 +183,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn paste_returns_201_with_empty_content() {
+    async fn paste_returns_422_with_empty_content() {
         let state = test_state().await;
 
         let response = router(state)
@@ -187,9 +193,7 @@ mod tests {
             .await
             .unwrap();
 
-        // FIXME : This is not a desired behaviour.
-        // The current handler allows empty content.
-        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     #[tokio::test]

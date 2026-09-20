@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct PasteRequest {
+    #[validate(length(min = 1, message = "content must not be empty"))]
     pub content: String,
     #[serde(default)]
     pub expires_in: Option<i64>,
