@@ -25,12 +25,13 @@ mod tests {
     use tower::ServiceExt;
 
     use super::health;
-    use crate::state;
+    use crate::{config::AppConfig, state};
 
     async fn test_state() -> crate::state::AppState {
         dotenvy::dotenv().ok();
+        let config = AppConfig::load().unwrap();
 
-        state::get_shared_state()
+        state::get_shared_state(config)
             .await
             .expect("failed to create test state")
     }

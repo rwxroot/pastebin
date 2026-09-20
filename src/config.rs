@@ -3,8 +3,8 @@ use std::env;
 use validator::Validate;
 
 /// Configuration loaded from environment variables.
-#[derive(Validate)]
-pub struct Config {
+#[derive(Validate, Clone)]
+pub struct AppConfig {
     /// Server port (default: 2729)
     #[validate(range(min = 1, max = u16::MAX, message = "port must be a valid port number"))]
     pub port: u16,
@@ -19,7 +19,7 @@ pub struct Config {
     pub max_paste_size: usize,
 }
 
-impl Config {
+impl AppConfig {
     /// Load configuration from environment variables.
     /// Panics if required environment variables are not set.
     pub fn load() -> Result<Self> {
@@ -37,7 +37,7 @@ impl Config {
             .parse::<usize>()
             .context("Invalid PASTEBIN_MAX_PASTE_SIZE")?;
 
-        let config = Config {
+        let config = AppConfig {
             port,
             host,
             database_url,

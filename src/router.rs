@@ -7,10 +7,11 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use tower_http::trace::TraceLayer;
 use tower_http::{
+    limit::RequestBodyLimitLayer,
     request_id::{MakeRequestUuid, SetRequestIdLayer},
     timeout::TimeoutLayer,
+    trace::TraceLayer,
 };
 
 use crate::{
@@ -27,20 +28,28 @@ pub fn get_router(state: AppState) -> Router {
             .get("x-request-id")
             .and_then(|value| value.to_str().ok())
             .unwrap_or("unknown-x-request-id");
+        let real_ip = req
+            .headers()
+            .get("x-real-ip")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("unknown-x-real-ip");
 
-        tracing::debug_span!("Request", %request_id, %method, %uri)
+        tracing::debug_span!("Request", %request_id, %real_ip, %method, %uri)
     });
 
     let timeout_layer =
-        TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(10));
+        TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(15));
 
     let request_id_layer = SetRequestIdLayer::x_request_id(MakeRequestUuid);
 
     // Application routes
     Router::new()
         .route("/health", get(health::health))
-        .route("/paste", post(paste::paste))
         .route("/fetch/{id}", get(fetch::fetch))
+        .route(
+            "/paste",
+            post(paste::paste).layer(RequestBodyLimitLayer::new(state.config.max_paste_size)),
+        )
         .layer(trace_layer)
         .layer(timeout_layer)
         .layer(request_id_layer)
@@ -61,21 +70,33 @@ mod tests {
     use tower::ServiceExt;
 
     use super::get_router;
-    use crate::state;
+    use crate::{config::AppConfig, state};
 
     async fn test_state() -> crate::state::AppState {
         dotenvy::dotenv().ok();
+        let config = AppConfig::load().unwrap();
 
-        state::get_shared_state()
+        state::get_shared_state(config)
             .await
             .expect("failed to create test state")
+    }
+
+    fn router(state: crate::state::AppState) -> axum::Router {
+        get_router(state)
+    }
+
+    async fn response_body_bytes(response: axum::response::Response) -> Vec<u8> {
+        to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("failed to read response body")
+            .to_vec()
     }
 
     #[tokio::test]
     async fn health_route_returns_200() {
         let state = test_state().await;
 
-        let response = get_router(state)
+        let response = router(state)
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -93,7 +114,7 @@ mod tests {
     async fn unknown_route_returns_404() {
         let state = test_state().await;
 
-        let response = get_router(state)
+        let response = router(state)
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -106,10 +127,55 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
-        let body = to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("failed to read response body");
+        let body = response_body_bytes(response).await;
 
         assert_eq!(&body[..], b"nothing to see here");
+    }
+
+    #[tokio::test]
+    async fn paste_enforces_body_size_limit() {
+        let state = test_state().await;
+        let max_size = state.config.max_paste_size;
+
+        // Create a body that exceeds the limit
+        let oversized_body = "x".repeat(max_size + 1);
+
+        let response = router(state)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/paste")
+                    .header("content-type", "application/json")
+                    .body(Body::from(oversized_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    }
+
+    #[tokio::test]
+    async fn paste_accepts_body_at_limit() {
+        let state = test_state().await;
+        let max_size = state.config.max_paste_size;
+
+        // Create a body exactly at the limit
+        let body_at_limit = "x".repeat(max_size);
+
+        let response = router(state)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/paste")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body_at_limit))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Body at limit should be processed (may succeed or fail validation, but not 413)
+        assert_ne!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
 }

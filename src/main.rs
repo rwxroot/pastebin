@@ -6,7 +6,7 @@ mod server;
 mod state;
 
 use anyhow::Result;
-use config::Config;
+use config::AppConfig;
 use dotenvy::dotenv;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
     dotenv().ok();
 
     // Load configuration from environment variables
-    let config = Config::load()?;
+    let config = AppConfig::load()?;
 
     // Initialize logging
     tracing_subscriber::registry()

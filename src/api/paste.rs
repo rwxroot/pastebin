@@ -53,36 +53,29 @@ mod tests {
         Router,
         body::Body,
         http::{Request, StatusCode, header},
+        routing::post,
     };
     use chrono::Utc;
-    use serde_json::json;
+    use serde_json::{Value, json};
     use tower::ServiceExt;
 
     use super::paste;
-    use crate::state;
+    use crate::{config::AppConfig, state};
 
-    fn load_env() {
+    async fn test_state() -> crate::state::AppState {
         dotenvy::dotenv().ok();
+        let config = AppConfig::load().unwrap();
 
-        assert!(
-            std::env::var("DATABASE_URL").is_ok(),
-            "DATABASE_URL was not found"
-        );
-    }
-
-    async fn app() -> Router {
-        load_env();
-
-        let state = state::get_shared_state()
+        state::get_shared_state(config)
             .await
-            .expect("failed to create test state");
-
-        Router::new()
-            .route("/paste", axum::routing::post(paste))
-            .with_state(state)
+            .expect("failed to create test state")
     }
 
-    fn json_request(body: serde_json::Value) -> Request<Body> {
+    fn router(state: crate::state::AppState) -> Router {
+        Router::new().route("/paste", post(paste)).with_state(state)
+    }
+
+    fn json_request(body: Value) -> Request<Body> {
         Request::builder()
             .method("POST")
             .uri("/paste")
@@ -91,7 +84,7 @@ mod tests {
             .unwrap()
     }
 
-    async fn response_json(response: axum::response::Response) -> serde_json::Value {
+    async fn response_json(response: axum::response::Response) -> Value {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("failed to read response body");
@@ -101,8 +94,9 @@ mod tests {
 
     #[tokio::test]
     async fn paste_returns_400_when_body_is_missing() {
-        let response = app()
-            .await
+        let state = test_state().await;
+
+        let response = router(state)
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -119,8 +113,9 @@ mod tests {
 
     #[tokio::test]
     async fn paste_returns_400_when_body_is_malformed() {
-        let response = app()
-            .await
+        let state = test_state().await;
+
+        let response = router(state)
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -137,15 +132,21 @@ mod tests {
 
     #[tokio::test]
     async fn paste_returns_422_when_content_is_missing() {
-        let response = app().await.oneshot(json_request(json!({}))).await.unwrap();
+        let state = test_state().await;
+
+        let response = router(state)
+            .oneshot(json_request(json!({})))
+            .await
+            .unwrap();
 
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     #[tokio::test]
     async fn paste_returns_422_when_content_has_wrong_type() {
-        let response = app()
-            .await
+        let state = test_state().await;
+
+        let response = router(state)
             .oneshot(json_request(json!({
                 "content": 123
             })))
@@ -157,8 +158,9 @@ mod tests {
 
     #[tokio::test]
     async fn paste_returns_201_with_valid_content() {
-        let response = app()
-            .await
+        let state = test_state().await;
+
+        let response = router(state)
             .oneshot(json_request(json!({
                 "content": "Hello, World!"
             })))
@@ -176,8 +178,9 @@ mod tests {
 
     #[tokio::test]
     async fn paste_returns_201_with_empty_content() {
-        let response = app()
-            .await
+        let state = test_state().await;
+
+        let response = router(state)
             .oneshot(json_request(json!({
                 "content": ""
             })))
@@ -191,8 +194,9 @@ mod tests {
 
     #[tokio::test]
     async fn paste_returns_201_with_expiration() {
-        let response = app()
-            .await
+        let state = test_state().await;
+
+        let response = router(state)
             .oneshot(json_request(json!({
                 "content": "Hello, World!",
                 "expires_in": 24
@@ -211,8 +215,9 @@ mod tests {
 
     #[tokio::test]
     async fn paste_returns_201_without_expiration() {
-        let response = app()
-            .await
+        let state = test_state().await;
+
+        let response = router(state)
             .oneshot(json_request(json!({
                 "content": "Never expires"
             })))
@@ -230,8 +235,9 @@ mod tests {
 
     #[tokio::test]
     async fn paste_response_contains_id_and_timestamps() {
-        let response = app()
-            .await
+        let state = test_state().await;
+
+        let response = router(state)
             .oneshot(json_request(json!({
                 "content": "Hello, World!",
                 "expires_in": 24
@@ -260,10 +266,11 @@ mod tests {
 
     #[tokio::test]
     async fn paste_response_has_valid_expiration() {
+        let state = test_state().await;
+
         let before = Utc::now().timestamp();
 
-        let response = app()
-            .await
+        let response = router(state)
             .oneshot(json_request(json!({
                 "content": "Expires later",
                 "expires_in": 24
@@ -292,16 +299,16 @@ mod tests {
 
     #[tokio::test]
     async fn paste_generates_unique_ids() {
-        let response_one = app()
-            .await
+        let state = test_state().await;
+
+        let response_one = router(state.clone())
             .oneshot(json_request(json!({
                 "content": "First paste"
             })))
             .await
             .unwrap();
 
-        let response_two = app()
-            .await
+        let response_two = router(state)
             .oneshot(json_request(json!({
                 "content": "Second paste"
             })))
@@ -329,10 +336,11 @@ mod tests {
 
     #[tokio::test]
     async fn paste_created_at_is_close_to_current_time() {
+        let state = test_state().await;
+
         let before = Utc::now().timestamp();
 
-        let response = app()
-            .await
+        let response = router(state)
             .oneshot(json_request(json!({
                 "content": "Timestamp test"
             })))
@@ -355,8 +363,9 @@ mod tests {
 
     #[tokio::test]
     async fn paste_expiration_is_null_when_omitted() {
-        let response = app()
-            .await
+        let state = test_state().await;
+
+        let response = router(state)
             .oneshot(json_request(json!({
                 "content": "No expiration"
             })))
@@ -370,8 +379,9 @@ mod tests {
 
     #[tokio::test]
     async fn paste_expiration_is_24_hours_after_creation() {
-        let response = app()
-            .await
+        let state = test_state().await;
+
+        let response = router(state)
             .oneshot(json_request(json!({
                 "content": "24 hour expiration",
                 "expires_in": 24
@@ -394,8 +404,9 @@ mod tests {
 
     #[tokio::test]
     async fn paste_accepts_zero_hour_expiration() {
-        let response = app()
-            .await
+        let state = test_state().await;
+
+        let response = router(state)
             .oneshot(json_request(json!({
                 "content": "Immediately expires",
                 "expires_in": 0

@@ -44,15 +44,16 @@ mod tests {
     use tower::ServiceExt;
 
     use super::fetch;
-    use crate::state;
+    use crate::{config::AppConfig, state};
 
     const CREATED_AT: i64 = 1_787_313_600;
     const EXPIRES_AT: i64 = 1_787_400_000;
 
     async fn test_state() -> crate::state::AppState {
         dotenvy::dotenv().ok();
+        let config = AppConfig::load().unwrap();
 
-        state::get_shared_state()
+        state::get_shared_state(config)
             .await
             .expect("failed to create test state")
     }
