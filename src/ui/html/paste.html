@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Paste {{ id }} — Pastebin{% endblock %}
+
+{% block content %}
+<pre id="paste-content">{{ content }}</pre>
+
+<div class="viewer-actions">
+    <button id="copy-btn">Copy</button>
+    <button id="copy-url-btn">Copy URL</button>
+</div>
+
+<script>
+    document.getElementById('copy-btn').addEventListener('click', () => {
+        const text = document.getElementById('paste-content').textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = document.getElementById('copy-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+        }).catch(() => {
+            alert('Failed to copy. Select and copy manually.');
+        });
+    });
+
+    document.getElementById('copy-url-btn').addEventListener('click', () => {
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            const btn = document.getElementById('copy-url-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = 'Copy URL'; }, 2000);
+        }).catch(() => {
+            alert('Failed to copy URL. Copy manually.');
+        });
+    });
+</script>
+{% endblock %}

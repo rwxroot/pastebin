@@ -24,21 +24,13 @@ mod tests {
     };
     use tower::ServiceExt;
 
+    use crate::state::test_state;
+
     use super::health;
-    use crate::{config::AppConfig, state};
-
-    async fn test_state() -> crate::state::AppState {
-        dotenvy::dotenv().ok();
-        let config = AppConfig::load().unwrap();
-
-        state::get_shared_state(config)
-            .await
-            .expect("failed to create test state")
-    }
 
     fn router(state: crate::state::AppState) -> Router {
         Router::new()
-            .route("/health", get(health))
+            .route("/api/health", get(health))
             .with_state(state)
     }
 
@@ -50,7 +42,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri("/health")
+                    .uri("/api/health")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -68,7 +60,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri("/health")
+                    .uri("/api/health")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -95,7 +87,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri("/health")
+                    .uri("/api/health")
                     .body(Body::empty())
                     .unwrap(),
             )

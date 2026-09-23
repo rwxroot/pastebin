@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Pastebin{% endblock %}</title>
+    <style>
+        :root {
+            --bg:        #1D1D20;
+            --fg:        #BABABA;
+            --fg-dim:    #666666;
+            --green:     #68C256;
+            --yellow:    #DCCD51;
+            --cyan:      #2387D9;
+            --blue-b:    #4AA3E8;
+            --cursor:    #a6a28c;
+            --font:      'SF Mono', Menlo, 'Fira Code', Consolas, monospace;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--fg);
+            font-family: var(--font);
+            font-size: 15px;
+            line-height: 1.7;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(29, 29, 32, 0.95);
+            border-bottom: 1px solid #333;
+            padding: 0.75rem 0;
+        }
+
+        main {
+            flex: 1;
+            max-width: 680px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 4rem 1.5rem;
+        }
+
+        .section {
+            margin-bottom: 5rem;
+        }
+
+        .section h1 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--yellow);
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.01em;
+        }
+
+        footer {
+            border-top: 1px solid #333;
+            padding: 1.5rem 0;
+            margin-top: auto;
+        }
+
+        .footer-inner {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+            text-align: center;
+            color: var(--fg-dim);
+            font-size: 0.78rem;
+            letter-spacing: 0.04em;
+        }
+
+        .site-title {
+            display: block;
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+            color: var(--fg);
+            text-decoration: none;
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            transition: color 0.2s;
+            position: relative;
+        }
+
+        .site-title:hover {
+            color: var(--green);
+        }
+
+        .prompt {
+            color: var(--cyan);
+            margin-right: 0.35rem;
+        }
+
+        .intro-content p {
+            margin-bottom: 1rem;
+            color: var(--fg);
+            font-size: 0.95rem;
+        }
+
+        .intro-content a {
+            color: var(--cyan);
+            text-decoration: none;
+        }
+
+        .intro-content a:hover {
+            color: var(--blue-b);
+        }
+
+        .cursor-blink {
+            display: inline-block;
+            width: 8px;
+            height: 1.1em;
+            background: var(--cursor);
+            margin-left: 4px;
+            animation: blink 1s step-end infinite;
+            vertical-align: text-bottom;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 1rem;
+            font-family: var(--font);
+            font-size: 0.9rem;
+            background: #111114;
+            color: var(--fg);
+            border: 1px solid #333;
+            border-radius: 6px;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        textarea:focus {
+            border-color: var(--cyan);
+        }
+
+        button {
+            display: inline-block;
+            padding: 0.5rem 1.5rem;
+            background: var(--cyan);
+            color: var(--bg);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: var(--font);
+            font-size: 0.88rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            margin-top: 1rem;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: var(--blue-b);
+        }
+
+        button:disabled {
+            background: #333;
+            color: var(--fg-dim);
+            cursor: not-allowed;
+        }
+
+        .viewer-actions {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .viewer-actions button {
+            margin: 0;
+            padding: 0.5rem 1.5rem;
+            background: var(--yellow);
+            color: var(--bg);
+        }
+
+        .viewer-actions button:hover {
+            background: #bbae45;
+        }
+
+        pre {
+            background: #111114;
+            border: 1px solid var(--yellow);
+            border-radius: 6px;
+            min-height: 200px;
+            padding: 1rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: var(--font);
+            font-size: 0.9rem;
+            color: var(--fg);
+            line-height: 1.7;
+        }
+
+        #error {
+            color: var(--yellow);
+            margin-top: 0.5rem;
+            font-size: 0.88rem;
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            main {
+                padding: 2.5rem 1rem;
+            }
+
+            .section {
+                margin-bottom: 3.5rem;
+            }
+
+            .section h1 {
+                font-size: 0.95rem;
+            }
+
+            textarea {
+                min-height: 150px;
+            }
+
+            pre {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="/" class="site-title">pastebin ~</a>
+    </header>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <div class="footer-inner">
+            <p>pastebin — rwxroot</p>
+        </div>
+    </footer>
+</body>
+</html>

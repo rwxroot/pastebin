@@ -9,7 +9,7 @@ pub struct PasteRequest {
     pub expires_in: Option<i64>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Serialize)]
 pub struct PasteResponse {
     pub id: String,
     pub created_at: i64,

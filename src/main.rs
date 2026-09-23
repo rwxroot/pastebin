@@ -4,6 +4,7 @@ mod router;
 mod schema;
 mod server;
 mod state;
+mod ui;
 
 use anyhow::Result;
 use config::AppConfig;

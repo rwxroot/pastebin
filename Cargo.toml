@@ -3,7 +3,6 @@ name = "pastebin"
 version = "0.1.0"
 edition = "2024"
 
-
 [profile.release]
 opt-level = "z"
 lto = true
@@ -12,28 +11,32 @@ panic = "abort"
 strip = "symbols"
 
 [dependencies]
+askama = { version = "0.16.1", default-features = false, features = [
+	"config",
+	"derive",
+	"std",
+] }
 anyhow = { version = "1.0.104", default-features = false, features = ["std"] }
 axum = { version = "0.8.9", default-features = false, features = [
 	"json",
 	"tokio",
 	"http1",
-
 ] }
-chrono = { version = "0.4.45", default-features = false, features = ["serde"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 dotenvy = { version = "0.15.7", default-features = false }
 nanoid = { version = "0.5.0", default-features = false }
 serde = { version = "1.0.229", default-features = false, features = ["derive"] }
-serde_json = { version = "1.0.151", default-features = false }
 sqlx = { version = "0.9.0", default-features = false, features = [
-	"chrono",
+
 	"macros",
 	"sqlite",
 	"migrate",
 	"runtime-tokio",
-	"tls-rustls-ring-webpki",
+
 ] }
 tokio = { version = "1.53.1", default-features = false, features = [
 	"rt-multi-thread",
+	"macros",
 ] }
 tower-http = { version = "0.7.1", default-features = false, features = [
 	"trace",
@@ -42,7 +45,7 @@ tower-http = { version = "0.7.1", default-features = false, features = [
 	"request-id",
 ] }
 tracing = { version = "0.1.44", default-features = false, features = [
-	"log",
+
 	"attributes",
 ] }
 tracing-subscriber = { version = "0.3.23", default-features = false, features = [
@@ -54,4 +57,5 @@ validator = { version = "0.21.0", default-features = false, features = [
 ] }
 
 [dev-dependencies]
+serde_json = { version = "1.0.151", default-features = false }
 tower = { version = "0.5.3", default-features = false, features = ["util"] }

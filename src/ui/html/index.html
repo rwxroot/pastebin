@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}New Paste — Pastebin{% endblock %}
+
+{% block content %}
+<form id="paste-form">
+    <textarea name="content" required autofocus></textarea>
+    <div id="error"></div>
+    <button type="submit" id="submit-btn">Paste</button>
+</form>
+
+<script>
+    const form = document.getElementById('paste-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const errorDiv = document.getElementById('error');
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        submitBtn.disabled = true;
+        errorDiv.style.display = 'none';
+
+        const content = form.content.value;
+
+        try {
+            const response = await fetch('/api/paste', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                window.location.href = '/fetch/' + data.id;
+            } else {
+                errorDiv.textContent = 'Failed to create paste.';
+                errorDiv.style.display = 'block';
+                submitBtn.disabled = false;
+            }
+        } catch (err) {
+            errorDiv.textContent = 'Network error.';
+            errorDiv.style.display = 'block';
+            submitBtn.disabled = false;
+        }
+    });
+</script>
+{% endblock %}

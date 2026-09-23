@@ -12,7 +12,7 @@ use crate::{
 };
 
 #[instrument(
-    name = "POST /paste",
+    name = "POST /api/paste",
     skip(state),
     fields(length = req.content.len())
 )]
@@ -65,29 +65,14 @@ mod tests {
     use serde_json::{Value, json};
     use tower::ServiceExt;
 
+    use crate::state::test_state;
+
     use super::paste;
-    use crate::{config::AppConfig, state};
-
-    async fn test_state() -> crate::state::AppState {
-        dotenvy::dotenv().ok();
-        let config = AppConfig::load().unwrap();
-
-        state::get_shared_state(config)
-            .await
-            .expect("failed to create test state")
-    }
 
     fn router(state: crate::state::AppState) -> Router {
-        Router::new().route("/paste", post(paste)).with_state(state)
-    }
-
-    fn json_request(body: Value) -> Request<Body> {
-        Request::builder()
-            .method("POST")
-            .uri("/paste")
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(body.to_string()))
-            .unwrap()
+        Router::new()
+            .route("/api/paste", post(paste))
+            .with_state(state)
     }
 
     async fn response_json(response: axum::response::Response) -> Value {
@@ -106,7 +91,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/paste")
+                    .uri("/api/paste")
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::empty())
                     .unwrap(),
@@ -125,7 +110,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/paste")
+                    .uri("/api/paste")
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(r#"{"content":"unterminated}"#))
                     .unwrap(),
@@ -141,7 +126,14 @@ mod tests {
         let state = test_state().await;
 
         let response = router(state)
-            .oneshot(json_request(json!({})))
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/paste")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({}).to_string()))
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -153,9 +145,19 @@ mod tests {
         let state = test_state().await;
 
         let response = router(state)
-            .oneshot(json_request(json!({
-                "content": 123
-            })))
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/paste")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({
+                            "content": 123
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -167,9 +169,19 @@ mod tests {
         let state = test_state().await;
 
         let response = router(state)
-            .oneshot(json_request(json!({
-                "content": "Hello, World!"
-            })))
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/paste")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({
+                            "content": "Hello, World!"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -179,7 +191,55 @@ mod tests {
 
         assert!(body["id"].as_str().is_some());
         assert!(body["created_at"].as_i64().is_some());
-        assert!(body["expires_in"].is_null());
+        assert!(body["expires_at"].is_null());
+    }
+
+    #[tokio::test]
+    async fn paste_rejects_missing_content_type() {
+        let state = test_state().await;
+
+        let response = router(state)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/paste")
+                    .body(Body::from(json!({ "content": "x" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    }
+
+    #[tokio::test]
+    async fn paste_rejects_non_integer_expires_in() {
+        let state = test_state().await;
+
+        for bad in [
+            json!({ "content": "x", "expires_in": "24" }),
+            json!({ "content": "x", "expires_in": 1.5 }),
+            json!({ "content": "x", "expires_in": true }),
+        ] {
+            let response = router(state.clone())
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/paste")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(bad.to_string()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(
+                response.status(),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "expires_in must be an integer, got {}",
+                bad
+            );
+        }
     }
 
     #[tokio::test]
@@ -187,9 +247,19 @@ mod tests {
         let state = test_state().await;
 
         let response = router(state)
-            .oneshot(json_request(json!({
-                "content": ""
-            })))
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/paste")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({
+                            "content": ""
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -197,55 +267,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn paste_returns_201_with_expiration() {
-        let state = test_state().await;
-
-        let response = router(state)
-            .oneshot(json_request(json!({
-                "content": "Hello, World!",
-                "expires_in": 24
-            })))
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::CREATED);
-
-        let body = response_json(response).await;
-
-        assert!(body["id"].as_str().is_some());
-        assert!(body["created_at"].as_i64().is_some());
-        assert!(body["expires_at"].as_i64().is_some());
-    }
-
-    #[tokio::test]
-    async fn paste_returns_201_without_expiration() {
-        let state = test_state().await;
-
-        let response = router(state)
-            .oneshot(json_request(json!({
-                "content": "Never expires"
-            })))
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::CREATED);
-
-        let body = response_json(response).await;
-
-        assert!(body["id"].as_str().is_some());
-        assert!(body["created_at"].as_i64().is_some());
-        assert!(body["expires_in"].is_null());
-    }
-
-    #[tokio::test]
     async fn paste_response_contains_id_and_timestamps() {
         let state = test_state().await;
 
         let response = router(state)
-            .oneshot(json_request(json!({
-                "content": "Hello, World!",
-                "expires_in": 24
-            })))
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/paste")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({
+                            "content": "Hello, World!",
+                            "expires_in": 24
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -275,10 +314,20 @@ mod tests {
         let before = Utc::now().timestamp();
 
         let response = router(state)
-            .oneshot(json_request(json!({
-                "content": "Expires later",
-                "expires_in": 24
-            })))
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/paste")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({
+                            "content": "Expires later",
+                            "expires_in": 24
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -306,16 +355,36 @@ mod tests {
         let state = test_state().await;
 
         let response_one = router(state.clone())
-            .oneshot(json_request(json!({
-                "content": "First paste"
-            })))
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/paste")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({
+                            "content": "First paste"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
         let response_two = router(state)
-            .oneshot(json_request(json!({
-                "content": "Second paste"
-            })))
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/paste")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({
+                            "content": "Second paste"
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
             .await
             .unwrap();
 
@@ -339,82 +408,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn paste_created_at_is_close_to_current_time() {
-        let state = test_state().await;
-
-        let before = Utc::now().timestamp();
-
-        let response = router(state)
-            .oneshot(json_request(json!({
-                "content": "Timestamp test"
-            })))
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::CREATED);
-
-        let body = response_json(response).await;
-
-        let created_at = body["created_at"]
-            .as_i64()
-            .expect("created_at should be an i64");
-
-        let after = Utc::now().timestamp();
-
-        assert!(created_at >= before);
-        assert!(created_at <= after);
-    }
-
-    #[tokio::test]
-    async fn paste_expiration_is_null_when_omitted() {
-        let state = test_state().await;
-
-        let response = router(state)
-            .oneshot(json_request(json!({
-                "content": "No expiration"
-            })))
-            .await
-            .unwrap();
-
-        let body = response_json(response).await;
-
-        assert!(body["expires_at"].is_null());
-    }
-
-    #[tokio::test]
-    async fn paste_expiration_is_24_hours_after_creation() {
-        let state = test_state().await;
-
-        let response = router(state)
-            .oneshot(json_request(json!({
-                "content": "24 hour expiration",
-                "expires_in": 24
-            })))
-            .await
-            .unwrap();
-
-        let body = response_json(response).await;
-
-        let created_at = body["created_at"]
-            .as_i64()
-            .expect("created_at should be an i64");
-
-        let expires_at = body["expires_at"]
-            .as_i64()
-            .expect("expires_at should be an i64");
-
-        assert_eq!(expires_at, created_at + 24 * 60 * 60);
-    }
-
-    #[tokio::test]
     async fn paste_accepts_zero_hour_expiration() {
         let state = test_state().await;
 
         let response = router(state)
-            .oneshot(json_request(json!({
-                "content": "Immediately expires",
-                "expires_in": 0
-            })))
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/paste")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        json!({
+                            "content": "Immediately expires",
+                            "expires_in": 0
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
             .await
             .unwrap();
 

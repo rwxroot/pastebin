@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-#[derive(Clone, Serialize)]
+#[derive(Serialize)]
 pub struct FetchResponse {
     pub id: String,
     pub content: String,

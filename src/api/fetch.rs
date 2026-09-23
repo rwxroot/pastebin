@@ -7,11 +7,11 @@ use tracing::instrument;
 
 use crate::{schema::fetch::FetchResponse, state::AppState};
 
-#[instrument(name = "GET /{id}", skip(state))]
+#[instrument(name = "GET /api/{id}", skip(state))]
 pub async fn fetch(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<(StatusCode, Json<FetchResponse>), StatusCode> {
+) -> Result<Json<FetchResponse>, StatusCode> {
     let paste = sqlx::query_as!(
         FetchResponse,
         r#"
@@ -29,7 +29,7 @@ pub async fn fetch(
     })?
     .ok_or(StatusCode::NOT_FOUND)?;
 
-    Ok((StatusCode::OK, Json(paste)))
+    Ok(Json(paste))
 }
 
 #[cfg(test)]
@@ -37,30 +37,20 @@ mod tests {
     use axum::{
         Router,
         body::Body,
-        http::{Request, StatusCode},
-        routing::get,
+        http::{Request, StatusCode, header},
+        routing::{get, post},
     };
-    use serde_json::Value;
+    use serde_json::{Value, json};
     use tower::ServiceExt;
 
+    use crate::{api::paste, state::test_state};
+
     use super::fetch;
-    use crate::{config::AppConfig, state};
-
-    const CREATED_AT: i64 = 1_787_313_600;
-    const EXPIRES_AT: i64 = 1_787_400_000;
-
-    async fn test_state() -> crate::state::AppState {
-        dotenvy::dotenv().ok();
-        let config = AppConfig::load().unwrap();
-
-        state::get_shared_state(config)
-            .await
-            .expect("failed to create test state")
-    }
 
     fn router(state: crate::state::AppState) -> Router {
         Router::new()
-            .route("/fetch/{id}", get(fetch))
+            .route("/api/paste", post(paste::paste))
+            .route("/api/fetch/{id}", get(fetch))
             .with_state(state)
     }
 
@@ -72,26 +62,48 @@ mod tests {
         serde_json::from_slice(&body).expect("response body was not valid JSON")
     }
 
-    async fn insert_paste(
-        state: &crate::state::AppState,
-        id: &str,
-        content: &str,
-        created_at: i64,
-        expires_at: Option<i64>,
-    ) {
-        sqlx::query(
-            r#"
-            INSERT INTO pastes (id, content, created_at, expires_at)
-            VALUES (?, ?, ?, ?)
-            "#,
-        )
-        .bind(id)
-        .bind(content)
-        .bind(created_at)
-        .bind(expires_at)
-        .execute(&state.db)
-        .await
-        .expect("failed to insert test paste");
+    /// Create a paste through the real `POST /api/paste` handler and return its
+    /// response JSON (`id`, `created_at`, `expires_at`).
+    async fn create_paste(router: &Router, content: &str, expires_in: Option<i64>) -> Value {
+        let mut body = json!({ "content": content });
+        if let Some(hours) = expires_in {
+            body["expires_in"] = json!(hours);
+        }
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/paste")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        response_json(response).await
+    }
+
+    #[tokio::test]
+    async fn fetch_returns_500_when_database_is_unavailable() {
+        let state = test_state().await;
+
+        // Closing the pool makes the SELECT fail with PoolClosed.
+        state.db.close().await;
+
+        let response = router(state)
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/fetch/some-id")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     #[tokio::test]
@@ -102,7 +114,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri("/fetch/does-not-exist")
+                    .uri("/api/fetch/does-not-exist")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -115,15 +127,17 @@ mod tests {
     #[tokio::test]
     async fn fetch_returns_200_when_paste_exists() {
         let state = test_state().await;
-        let id = format!("test-{}", nanoid::nanoid!(6));
+        let router = router(state);
 
-        insert_paste(&state, &id, "Hello, World!", CREATED_AT, Some(EXPIRES_AT)).await;
+        let created = create_paste(&router, "Hello, World!", Some(24)).await;
+        let id = created["id"].as_str().expect("id").to_string();
 
-        let response = router(state)
+        let response = router
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri(format!("/fetch/{id}"))
+                    .uri(format!("/api/fetch/{id}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -134,24 +148,26 @@ mod tests {
 
         let body = response_json(response).await;
 
-        assert_eq!(body["id"], id);
+        assert_eq!(body["id"], created["id"]);
         assert_eq!(body["content"], "Hello, World!");
-        assert_eq!(body["created_at"], CREATED_AT);
-        assert_eq!(body["expires_at"], EXPIRES_AT);
+        assert_eq!(body["created_at"], created["created_at"]);
+        assert_eq!(body["expires_at"], created["expires_at"]);
     }
 
     #[tokio::test]
     async fn fetch_returns_paste_without_expiration() {
         let state = test_state().await;
-        let id = format!("test-{}", nanoid::nanoid!(6));
+        let router = router(state);
 
-        insert_paste(&state, &id, "This paste does not expire", CREATED_AT, None).await;
+        let created = create_paste(&router, "This paste does not expire", None).await;
+        let id = created["id"].as_str().expect("id").to_string();
 
-        let response = router(state)
+        let response = router
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri(format!("/fetch/{id}"))
+                    .uri(format!("/api/fetch/{id}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -162,25 +178,27 @@ mod tests {
 
         let body = response_json(response).await;
 
-        assert_eq!(body["id"], id);
+        assert_eq!(body["id"], created["id"]);
         assert_eq!(body["content"], "This paste does not expire");
-        assert_eq!(body["created_at"], CREATED_AT);
+        assert_eq!(body["created_at"], created["created_at"]);
         assert!(body["expires_at"].is_null());
     }
 
     #[tokio::test]
     async fn fetch_returns_exact_content() {
         let state = test_state().await;
-        let id = format!("test-{}", nanoid::nanoid!(6));
+        let router = router(state);
         let content = "line one\nline two\nこんにちは";
 
-        insert_paste(&state, &id, content, CREATED_AT, None).await;
+        let created = create_paste(&router, content, None).await;
+        let id = created["id"].as_str().expect("id").to_string();
 
-        let response = router(state)
+        let response = router
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri(format!("/fetch/{id}"))
+                    .uri(format!("/api/fetch/{id}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -191,9 +209,9 @@ mod tests {
 
         let body = response_json(response).await;
 
-        assert_eq!(body["id"], id);
+        assert_eq!(body["id"], created["id"]);
         assert_eq!(body["content"], content);
-        assert_eq!(body["created_at"], CREATED_AT);
+        assert_eq!(body["created_at"], created["created_at"]);
         assert!(body["expires_at"].is_null());
     }
 }
