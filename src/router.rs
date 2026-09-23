@@ -13,11 +13,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-use crate::{
-    api::{fetch, health, paste},
-    state::AppState,
-    ui::{fetch as ui_fetch, not_found as ui_not_found, paste as ui_paste},
-};
+use crate::{api, state::AppState, ui};
 
 pub fn get_router(state: AppState) -> Router {
     let trace_layer = TraceLayer::new_for_http().make_span_with(|req: &Request| {
@@ -34,7 +30,7 @@ pub fn get_router(state: AppState) -> Router {
             .and_then(|value| value.to_str().ok())
             .unwrap_or("unknown-x-real-ip");
 
-        tracing::debug_span!("Request", %request_id, %real_ip, %method, %uri)
+        tracing::info_span!("Request", %request_id, %real_ip, %method, %uri)
     });
 
     let timeout_layer =
@@ -46,21 +42,20 @@ pub fn get_router(state: AppState) -> Router {
 
     // UI routes
     let ui_router = Router::new()
-        .route("/", get(ui_paste::index))
-        .route("/fetch/{id}", get(ui_fetch::paste_view));
+        .route("/", get(ui::paste::paste))
+        .route("/favicon.ico", get(ui::icon::favicon))
+        .route("/fetch/{id}", get(ui::fetch::paste));
 
     // API routes
     let api_router = Router::new()
-        .route("/api/health", get(health::health))
+        .route("/api/health", get(api::health::health))
         .route(
             "/api/paste",
-            post(paste::paste).layer(RequestBodyLimitLayer::new(state.config.max_paste_size)),
+            post(api::paste::paste).layer(RequestBodyLimitLayer::new(state.config.max_paste_size)),
         )
-        .route("/api/fetch/{id}", get(fetch::fetch));
+        .route("/api/fetch/{id}", get(api::fetch::fetch));
 
-    let router = ui_router
-        .merge(api_router)
-        .fallback(ui_not_found::not_found);
+    let router = ui_router.merge(api_router).fallback(ui::lost::lost);
 
     router
         .layer(trace_layer)

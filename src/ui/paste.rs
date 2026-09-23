@@ -1,8 +1,8 @@
 use askama::Template;
 use axum::response::Html;
 
-use super::IndexTemplate;
+use crate::ui::PasteTemplate;
 
-pub async fn index() -> Html<String> {
-    Html(IndexTemplate.render().unwrap())
+pub async fn paste() -> Html<String> {
+    Html(PasteTemplate.render().unwrap())
 }

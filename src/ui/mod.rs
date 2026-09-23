@@ -1,21 +1,21 @@
 pub mod fetch;
-#[path = "404.rs"]
-pub mod not_found;
+pub mod icon;
+pub mod lost;
 pub mod paste;
 
 use askama::Template;
 
 #[derive(Template)]
-#[template(path = "index.html")]
-struct IndexTemplate;
+#[template(path = "paste.html")]
+struct PasteTemplate;
 
 #[derive(Template)]
-#[template(path = "paste.html")]
-struct PasteTemplate<'a> {
+#[template(path = "fetch.html")]
+struct FetchTemplate<'a> {
     id: &'a str,
     content: &'a str,
 }
 
 #[derive(Template)]
-#[template(path = "404.html")]
+#[template(path = "lost.html")]
 struct NotFoundTemplate;
