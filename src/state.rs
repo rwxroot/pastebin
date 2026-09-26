@@ -39,8 +39,9 @@ pub async fn test_state() -> AppState {
         .await
         .expect("failed to run migrations");
 
-    AppState {
-        db,
-        config: AppConfig::load().expect("failed to load config"),
-    }
+    let mut config = AppConfig::load().expect("failed to load config");
+    // Tests send no proxy IP headers, so disable rate limiting to avoid 429s.
+    config.rate_limit = false;
+
+    AppState { db, config }
 }

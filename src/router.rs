@@ -6,6 +6,9 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
+use tower_governor::{
+    GovernorLayer, governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor,
+};
 use tower_http::{
     limit::RequestBodyLimitLayer,
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
@@ -16,6 +19,7 @@ use tower_http::{
 use crate::{api, state::AppState, ui};
 
 pub fn get_router(state: AppState) -> Router {
+    // Log every request with method, uri, request id, real ip.
     let trace_layer = TraceLayer::new_for_http().make_span_with(|req: &Request| {
         let uri = req.uri();
         let method = req.method();
@@ -24,20 +28,23 @@ pub fn get_router(state: AppState) -> Router {
             .get("x-request-id")
             .and_then(|value| value.to_str().ok())
             .unwrap_or("unknown-x-request-id");
-        let real_ip = req
+        let client_ip = req
             .headers()
             .get("x-real-ip")
             .and_then(|value| value.to_str().ok())
             .unwrap_or("unknown-x-real-ip");
 
-        tracing::info_span!("Request", %request_id, %real_ip, %method, %uri)
+        tracing::info_span!("Request", %request_id, %client_ip, %method, %uri)
     });
 
+    // Cap each request at 15s so a slow client can't hold a worker.
     let timeout_layer =
         TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(15));
 
+    // Stamp a x-request-id on the incoming requests.
     let request_id_layer = SetRequestIdLayer::x_request_id(MakeRequestUuid);
 
+    // Echo the incoming x-request-id back on the response.
     let propagate_request_id_layer = PropagateRequestIdLayer::x_request_id();
 
     // UI routes
@@ -57,12 +64,24 @@ pub fn get_router(state: AppState) -> Router {
 
     let router = ui_router.merge(api_router).fallback(ui::lost::lost);
 
-    router
+    let router = router
         .layer(trace_layer)
         .layer(timeout_layer)
         .layer(propagate_request_id_layer)
-        .layer(request_id_layer)
-        .with_state(state)
+        .layer(request_id_layer);
+
+    // Limit requests per client IP.
+    if state.config.rate_limit {
+        let governor = GovernorConfigBuilder::default()
+            .per_millisecond(500)
+            .burst_size(5)
+            .key_extractor(SmartIpKeyExtractor)
+            .finish()
+            .expect("invalid rate limit config");
+        return router.layer(GovernorLayer::new(governor)).with_state(state);
+    }
+
+    router.with_state(state)
 }
 
 #[cfg(test)]
@@ -130,6 +149,37 @@ mod tests {
 
         // MakeRequestUuid generates v4 UUIDs.
         assert_eq!(request_id.len(), 36);
+    }
+
+    #[tokio::test]
+    async fn rate_limiter_blocks_after_burst() {
+        // Rate limiting is off for normal tests (no IP headers); opt back in and
+        // key on a spoofed real client IP so the burst trips a 429.
+        let mut state = test_state().await;
+        state.config.rate_limit = true;
+        let state = state;
+
+        let router = crate::router::get_router(state);
+
+        let mut last_status = StatusCode::default();
+        for _ in 0..=11 {
+            // burst(10) + a few over the per-second budget
+            let response = router
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri("/api/health")
+                        .header("x-real-ip", "203.0.113.9")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            last_status = response.status();
+        }
+
+        assert_eq!(last_status, StatusCode::TOO_MANY_REQUESTS);
     }
 
     #[tokio::test]

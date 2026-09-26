@@ -17,6 +17,8 @@ pub struct AppConfig {
     /// Maximum paste size in bytes (default: 64KB = 65536)
     #[validate(range(min = 1, max = usize::MAX, message = "max_paste_size must be at least 1"))]
     pub max_paste_size: usize,
+    /// Enable per-client rate limiting (default: true). Set PASTEBIN_RATE_LIMIT=false to disable.
+    pub rate_limit: bool,
 }
 
 impl AppConfig {
@@ -37,11 +39,16 @@ impl AppConfig {
             .parse::<usize>()
             .context("Invalid PASTEBIN_MAX_PASTE_SIZE")?;
 
+        let rate_limit = env::var("PASTEBIN_RATE_LIMIT")
+            .map(|v| v.parse::<bool>().unwrap_or(true))
+            .unwrap_or(true);
+
         let config = AppConfig {
             port,
             host,
             database_url,
             max_paste_size,
+            rate_limit,
         };
 
         config.validate()?;
