@@ -5,6 +5,7 @@ use validator::Validate;
 pub struct PasteRequest {
     #[validate(length(min = 1, message = "content must not be empty"))]
     pub content: String,
+    /// Expiry in hours.
     #[serde(default)]
     pub expires_in: Option<i64>,
 }

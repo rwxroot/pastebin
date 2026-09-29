@@ -17,7 +17,7 @@ pub async fn fetch(
         r#"
         SELECT id, content, created_at, expires_at
         FROM pastes
-        WHERE id = ?
+        WHERE id = ? AND (expires_at IS NULL OR expires_at > unixepoch())
         "#,
         id
     )
@@ -213,5 +213,36 @@ mod tests {
         assert_eq!(body["content"], content);
         assert_eq!(body["created_at"], created["created_at"]);
         assert!(body["expires_at"].is_null());
+    }
+
+    #[tokio::test]
+    async fn fetch_returns_404_when_paste_is_expired() {
+        let state = test_state().await;
+        let router = router(state.clone());
+
+        // Insert a paste whose expiry is already in the past (simulates an
+        // expired paste that wasn't manually cleaned yet).
+        sqlx::query("INSERT INTO pastes (id, content, created_at, expires_at) VALUES (?, ?, ?, ?)")
+            .bind("expired1")
+            .bind("already gone")
+            .bind(chrono::Utc::now().timestamp() - 100)
+            .bind(chrono::Utc::now().timestamp() - 50)
+            .execute(&state.db)
+            .await
+            .unwrap();
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/fetch/expired1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }

@@ -152,8 +152,29 @@
             border-color: var(--cyan);
         }
 
+        select {
+            padding: 0.4rem 0.8rem;
+            font-family: var(--font);
+            font-size: 0.88rem;
+            background: #111114;
+            color: var(--fg);
+            border: 1px solid #333;
+            border-radius: 6px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        select:focus {
+            border-color: var(--cyan);
+        }
+
+        label {
+            font-size: 0.88rem;
+            margin-right: 0.5rem;
+        }
+
         button {
-            display: inline-block;
+            display: block;
             padding: 0.5rem 1.5rem;
             background: var(--cyan);
             color: var(--bg);

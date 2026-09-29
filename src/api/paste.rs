@@ -408,7 +408,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn paste_accepts_zero_hour_expiration() {
+    async fn paste_computes_hours_expiration() {
         let state = test_state().await;
 
         let response = router(state)
@@ -419,8 +419,8 @@ mod tests {
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(
                         json!({
-                            "content": "Immediately expires",
-                            "expires_in": 0
+                            "content": "Expires in 2 hours",
+                            "expires_in": 2
                         })
                         .to_string(),
                     ))
@@ -441,6 +441,6 @@ mod tests {
             .as_i64()
             .expect("expires_at should be an i64");
 
-        assert_eq!(expires_at, created_at);
+        assert_eq!(expires_at - created_at, 2 * 60 * 60);
     }
 }

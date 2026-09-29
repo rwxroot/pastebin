@@ -5,6 +5,14 @@
 {% block content %}
 <form id="paste-form">
     <textarea name="content" required autofocus></textarea>
+    <label for="expiry">Expire after</label>
+    <select id="expiry" name="expires_in">
+        <option value="">Never</option>
+        <option value="1">1 hour</option>
+        <option value="24" selected>1 day</option>
+        <option value="168">1 week</option>
+        <option value="720">1 month</option>
+    </select>
     <div id="error"></div>
     <button type="submit" id="submit-btn">Paste</button>
 </form>
@@ -20,12 +28,16 @@
         errorDiv.style.display = 'none';
 
         const content = form.content.value;
+        const expiry = form.expires_in.value; // already in hours
+
+        const body = { content };
+        if (expiry) body.expires_in = Number(expiry);
 
         try {
             const response = await fetch('/api/paste', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content })
+                body: JSON.stringify(body)
             });
 
             if (response.ok) {
