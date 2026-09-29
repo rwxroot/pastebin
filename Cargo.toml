@@ -31,7 +31,6 @@ sqlx = { version = "0.9.0", default-features = false, features = [
 	"sqlite",
 	"migrate",
 	"runtime-tokio",
-
 ] }
 tokio = { version = "1.53.1", default-features = false, features = [
 	"rt-multi-thread",
@@ -46,6 +45,7 @@ tower-http = { version = "0.7.1", default-features = false, features = [
 	"limit",
 	"timeout",
 	"request-id",
+	"compression-gzip",
 ] }
 tracing = { version = "0.1.44", default-features = false, features = [
 	"attributes",

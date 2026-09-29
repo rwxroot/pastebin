@@ -10,6 +10,7 @@ use tower_governor::{
     GovernorLayer, governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor,
 };
 use tower_http::{
+    compression::CompressionLayer,
     limit::RequestBodyLimitLayer,
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     timeout::TimeoutLayer,
@@ -19,7 +20,7 @@ use tower_http::{
 use crate::{api, state::AppState, ui};
 
 pub fn get_router(state: AppState) -> Router {
-    // Log every request with method, uri, request id, real ip.
+    // Log every request with method, uri, request id, client ip.
     let trace_layer = TraceLayer::new_for_http().make_span_with(|req: &Request| {
         let uri = req.uri();
         let method = req.method();
@@ -68,7 +69,8 @@ pub fn get_router(state: AppState) -> Router {
         .layer(trace_layer)
         .layer(timeout_layer)
         .layer(propagate_request_id_layer)
-        .layer(request_id_layer);
+        .layer(request_id_layer)
+        .layer(CompressionLayer::new());
 
     // Limit requests per client IP.
     if state.config.rate_limit {
@@ -163,7 +165,7 @@ mod tests {
 
         let mut last_status = StatusCode::default();
         for _ in 0..=11 {
-            // burst(10) + a few over the per-second budget
+            // burst(5) + enough over the per-second budget to trip a 429
             let response = router
                 .clone()
                 .oneshot(

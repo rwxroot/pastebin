@@ -4,5 +4,3 @@ CREATE TABLE pastes (
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
     expires_at INTEGER
 );
-
-CREATE INDEX idx_expires_at ON pastes(expires_at);
