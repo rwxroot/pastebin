@@ -4,8 +4,7 @@ Some housekeeping stuff.
 
 ## Remove expired pastes
 
-Expired pastes are already hidden from fetches (they return 404), but the rows
-stay in the database.
+Handled automatically: `init_server` deletes expired rows once at startup. For a manual sweep:
 
 ```bash
 sqlite3 pastebin.db "DELETE FROM pastes WHERE expires_at IS NOT NULL AND expires_at < unixepoch();"
