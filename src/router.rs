@@ -101,10 +101,6 @@ mod tests {
     use super::get_router;
     use crate::state::test_state;
 
-    fn router(state: crate::state::AppState) -> axum::Router {
-        get_router(state)
-    }
-
     async fn response_body_bytes(response: axum::response::Response) -> Vec<u8> {
         to_bytes(response.into_body(), usize::MAX)
             .await
@@ -116,7 +112,7 @@ mod tests {
     async fn health_route_returns_200() {
         let state = test_state().await;
 
-        let response = router(state)
+        let response = get_router(state)
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -136,7 +132,7 @@ mod tests {
         // x-request-id header, which the trace layer uses for correlation.
         let state = test_state().await;
 
-        let response = router(state)
+        let response = get_router(state)
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -192,7 +188,7 @@ mod tests {
     async fn unknown_route_returns_404() {
         let state = test_state().await;
 
-        let response = router(state)
+        let response = get_router(state)
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -219,7 +215,7 @@ mod tests {
         // Create a body that exceeds the limit
         let oversized_body = "x".repeat(max_size + 1);
 
-        let response = router(state)
+        let response = get_router(state)
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -242,7 +238,7 @@ mod tests {
         // Create a body exactly at the limit
         let body_at_limit = "x".repeat(max_size);
 
-        let response = router(state)
+        let response = get_router(state)
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -262,7 +258,7 @@ mod tests {
     async fn index_page_returns_200() {
         let state = test_state().await;
 
-        let response = router(state)
+        let response = get_router(state)
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -294,7 +290,7 @@ mod tests {
     async fn view_paste_returns_404_when_not_found() {
         let state = test_state().await;
 
-        let response = router(state)
+        let response = get_router(state)
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -315,7 +311,7 @@ mod tests {
         let state = test_state().await;
         state.db.close().await;
 
-        let response = router(state)
+        let response = get_router(state)
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -338,7 +334,7 @@ mod tests {
             "content": "Test paste content"
         });
 
-        let create_response = router(state.clone())
+        let create_response = get_router(state.clone())
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -357,7 +353,7 @@ mod tests {
         let paste_id = paste_response["id"].as_str().unwrap();
 
         // Now fetch the paste via the UI route
-        let response = router(state)
+        let response = get_router(state)
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -391,7 +387,7 @@ mod tests {
         let state = test_state().await;
         let payload = "<script>alert('xss')</script><b>bold</b>";
 
-        let created = router(state.clone())
+        let created = get_router(state.clone())
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -412,7 +408,7 @@ mod tests {
             .unwrap()
             .to_string();
 
-        let response = router(state)
+        let response = get_router(state)
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -449,7 +445,7 @@ mod tests {
     async fn api_fetch_returns_404_when_not_found() {
         let state = test_state().await;
 
-        let response = router(state)
+        let response = get_router(state)
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -483,7 +479,7 @@ mod tests {
         .await
         .expect("failed to insert test paste");
 
-        let response = router(state)
+        let response = get_router(state)
             .oneshot(
                 Request::builder()
                     .method("GET")
