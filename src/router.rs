@@ -48,6 +48,10 @@ pub fn get_router(state: AppState) -> Router {
     // Echo the incoming x-request-id back on the response.
     let propagate_request_id_layer = PropagateRequestIdLayer::x_request_id();
 
+    // Compression
+    // TODO Check if this shit actually works
+    let compression_layer = CompressionLayer::new();
+
     // UI routes
     let ui_router = Router::new()
         .route("/", get(ui::paste::paste))
@@ -70,7 +74,7 @@ pub fn get_router(state: AppState) -> Router {
         .layer(timeout_layer)
         .layer(propagate_request_id_layer)
         .layer(request_id_layer)
-        .layer(CompressionLayer::new());
+        .layer(compression_layer);
 
     // Limit requests per client IP.
     if state.config.rate_limit {
