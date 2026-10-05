@@ -12,11 +12,7 @@ use crate::{
     state::AppState,
 };
 
-#[instrument(
-    name = "POST /api/paste",
-    skip(state, body),
-    fields(length = body.len())
-)]
+#[instrument(name = "POST /api/paste", skip(state, body))]
 pub async fn paste(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -25,6 +21,7 @@ pub async fn paste(
     let (content, expires_in) = parse_paste(&headers, body)?;
 
     let paste = insert_paste(&state.db, &content, expires_in).await?;
+    tracing::info!(bytes = content.len(), "stored paste");
 
     // JSON on explicit request; text default answers with the paste URL.
     if headers

@@ -15,29 +15,33 @@ use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     set_header::SetResponseHeaderLayer,
     timeout::TimeoutLayer,
-    trace::TraceLayer,
+    trace::{DefaultOnEos, DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
 
 use crate::{api, state::AppState, ui};
 
 pub fn get_router(state: AppState) -> Router {
     // Log every request with method, uri, request id, client ip.
-    let trace_layer = TraceLayer::new_for_http().make_span_with(|req: &Request| {
-        let uri = req.uri();
-        let method = req.method();
-        let request_id = req
-            .headers()
-            .get("x-request-id")
-            .and_then(|value| value.to_str().ok())
-            .unwrap_or("unknown-x-request-id");
-        let client_ip = req
-            .headers()
-            .get("x-real-ip")
-            .and_then(|value| value.to_str().ok())
-            .unwrap_or("unknown-x-real-ip");
+    let trace_layer = TraceLayer::new_for_http()
+        .make_span_with(|req: &Request| {
+            let uri = req.uri();
+            let method = req.method();
+            let request_id = req
+                .headers()
+                .get("x-request-id")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or("unknown-x-request-id");
+            let client_ip = req
+                .headers()
+                .get("x-real-ip")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or("unknown-x-real-ip");
 
-        tracing::info_span!("Request", %request_id, %client_ip, %method, %uri)
-    });
+            tracing::info_span!("Request", %request_id, %client_ip, %method, %uri)
+        })
+        .on_response(DefaultOnResponse::new().level(tracing::Level::INFO))
+        .on_request(DefaultOnRequest::new().level(tracing::Level::DEBUG))
+        .on_eos(DefaultOnEos::new().level(tracing::Level::DEBUG));
 
     // Cap each request at 15s so a slow client can't hold a worker.
     let timeout_layer =
