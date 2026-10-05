@@ -29,7 +29,6 @@ pub async fn fetch(
 }
 
 /// Get a paste from the db, 404 if missing, 500 if the db fails.
-/// Shared by the API handler and the HTML view.
 pub async fn get_paste(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -82,8 +81,7 @@ mod tests {
         serde_json::from_slice(&body).expect("response body was not valid JSON")
     }
 
-    /// Create a paste through the real `POST /api/paste` handler and return its
-    /// response JSON (`id`, `created_at`, `expires_at`).
+    /// Create a paste through the real `POST /api/paste` handler and return its response
     async fn create_paste(router: &Router, content: &str, expires_in: Option<i64>) -> Value {
         let mut body = json!({ "content": content });
         if let Some(hours) = expires_in {
@@ -96,6 +94,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/paste")
                     .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::ACCEPT, "application/json")
                     .body(Body::from(body.to_string()))
                     .unwrap(),
             )

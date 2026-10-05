@@ -9,7 +9,7 @@
         :root {
             --bg:        #1D1D20;
             --fg:        #BABABA;
-            --fg-dim:    #666666;
+            --fg-dim:    #8a8a8a;
             --green:     #68C256;
             --yellow:    #DCCD51;
             --cyan:      #2387D9;
@@ -50,6 +50,12 @@
             width: 100%;
             margin: 0 auto;
             padding: 4rem 1.5rem;
+        }
+
+        main.centered {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .section {
@@ -170,7 +176,6 @@
 
         label {
             font-size: 0.88rem;
-            margin-right: 0.5rem;
         }
 
         button {
@@ -193,6 +198,11 @@
             background: var(--blue-b);
         }
 
+        button:focus-visible {
+            outline: 2px solid var(--cyan);
+            outline-offset: 2px;
+        }
+
         button:disabled {
             background: #333;
             color: var(--fg-dim);
@@ -202,7 +212,7 @@
         .viewer-actions {
             display: flex;
             flex-direction: column;
-            align-items: flex-start;
+            align-items: stretch;
             gap: 1rem;
             margin: 1rem 0;
         }
@@ -240,6 +250,37 @@
             display: none;
         }
 
+        .form-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        #char-count {
+            margin-left: auto;
+            font-size: 0.78rem;
+            color: var(--fg-dim);
+        }
+
+        #char-count.warn {
+            color: var(--yellow);
+        }
+
+        #paste-form button {
+            width: 100%;
+        }
+
+        .hint {
+            margin-top: 1.5rem;
+            color: var(--fg-dim);
+            font-size: 0.78rem;
+            letter-spacing: 0.02em;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
         @media (max-width: 600px) {
             main {
                 padding: 2.5rem 1rem;
@@ -268,13 +309,13 @@
         <a href="/" class="site-title">pastebin ~</a>
     </header>
 
-    <main>
+    <main class="{% block main_class %}{% endblock %}">
         {% block content %}{% endblock %}
     </main>
 
     <footer>
         <div class="footer-inner">
-            <p>pastebin — rwxroot.dev</p>
+            <p>pastebin - rwxroot.dev</p>
         </div>
     </footer>
 </body>

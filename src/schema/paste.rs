@@ -1,12 +1,4 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Deserialize)]
-pub struct PasteRequest {
-    pub content: String,
-    /// Expiry in hours.
-    #[serde(default)]
-    pub expires_in: Option<i64>,
-}
+use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct PasteResponse {

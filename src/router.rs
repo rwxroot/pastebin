@@ -13,6 +13,7 @@ use tower_http::{
     compression::CompressionLayer,
     limit::RequestBodyLimitLayer,
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
+    set_header::SetResponseHeaderLayer,
     timeout::TimeoutLayer,
     trace::TraceLayer,
 };
@@ -52,6 +53,12 @@ pub fn get_router(state: AppState) -> Router {
     // TODO Check if this shit actually works
     let compression_layer = CompressionLayer::new();
 
+    // Disable caching
+    let no_cache_layer = SetResponseHeaderLayer::overriding(
+        axum::http::header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("no-cache"),
+    );
+
     // UI routes
     let ui_router = Router::new()
         .route("/", get(ui::paste::paste))
@@ -74,6 +81,7 @@ pub fn get_router(state: AppState) -> Router {
         .layer(timeout_layer)
         .layer(propagate_request_id_layer)
         .layer(request_id_layer)
+        .layer(no_cache_layer)
         .layer(compression_layer);
 
     // Limit requests per client IP.
@@ -340,6 +348,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/paste")
                     .header("content-type", "application/json")
+                    .header("accept", "application/json")
                     .body(Body::from(paste_body.to_string()))
                     .unwrap(),
             )
@@ -393,6 +402,7 @@ mod tests {
                     .method("POST")
                     .uri("/api/paste")
                     .header("content-type", "application/json")
+                    .header("accept", "application/json")
                     .body(Body::from(
                         serde_json::json!({ "content": payload }).to_string(),
                     ))

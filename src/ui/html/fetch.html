@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Paste {{ id }} — Pastebin{% endblock %}
+{% block title %}Paste {{ id }} - Pastebin{% endblock %}
 
 {% block content %}
 <pre id="paste-content">{{ content }}</pre>
@@ -10,6 +10,15 @@
 </div>
 
 <script>
+    // Click anywhere in the paste selects all of it.
+    document.getElementById('paste-content').addEventListener('click', () => {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(document.getElementById('paste-content'));
+        selection.removeAllRanges();
+        selection.addRange(range);
+    });
+
     // Ctrl/Cmd+A selects only the paste content, not the whole page.
     document.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'a') {

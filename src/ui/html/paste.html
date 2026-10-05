@@ -1,26 +1,58 @@
 {% extends "base.html" %}
 
-{% block title %}New Paste — Pastebin{% endblock %}
+{% block title %}New Paste - Pastebin{% endblock %}
+
+{% block main_class %}centered{% endblock %}
 
 {% block content %}
 <form id="paste-form">
-    <textarea name="content" required autofocus></textarea>
-    <label for="expiry">Expire after</label>
-    <select id="expiry" name="expires_in">
-        <option value="">Never</option>
-        <option value="1">1 hour</option>
-        <option value="24" selected>1 day</option>
-        <option value="168">1 week</option>
-        <option value="720">1 month</option>
-    </select>
-    <div id="error"></div>
+    <textarea name="content" required autofocus spellcheck="false" placeholder="# paste your snippet here"></textarea>
+    <div class="form-row">
+        <label for="expiry">Expire after</label>
+        <select id="expiry" name="expires_in">
+            <option value="">Never</option>
+            <option value="1">1 hour</option>
+            <option value="24" selected>1 day</option>
+            <option value="168">1 week</option>
+            <option value="720">1 month</option>
+        </select>
+        <span id="char-count"></span>
+    </div>
+    <div id="error" role="alert"></div>
     <button type="submit" id="submit-btn">Paste</button>
 </form>
+
+<p class="hint"><span class="prompt">$</span> curl --data-binary @notes.txt <span id="curl-host"></span>/api/paste</p>
 
 <script>
     const form = document.getElementById('paste-form');
     const submitBtn = document.getElementById('submit-btn');
     const errorDiv = document.getElementById('error');
+    const counter = document.getElementById('char-count');
+    const textarea = form.content;
+
+    // cap comes from AppConfig via the template
+    const MAX_BYTES = {{ max_size }};
+
+    const humanSize = (b) => (b >= 1024 ? `${(b / 1024).toFixed(1)} KB` : `${b} B`);
+
+    const updateCount = () => {
+        const bytes = new Blob([textarea.value]).size;
+        counter.textContent = `${humanSize(bytes)} / ${humanSize(MAX_BYTES)}`;
+        counter.classList.toggle('warn', bytes > MAX_BYTES * 0.9);
+    };
+    textarea.addEventListener('input', updateCount);
+    // bfcache restores text without input events; recount when the page shows
+    window.addEventListener('pageshow', updateCount);
+    updateCount();
+
+    textarea.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            form.requestSubmit();
+        }
+    });
+
+    document.getElementById('curl-host').textContent = window.location.host;
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -36,7 +68,7 @@
         try {
             const response = await fetch('/api/paste', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify(body)
             });
 
@@ -49,7 +81,8 @@
                 submitBtn.disabled = false;
             }
         } catch (err) {
-            errorDiv.textContent = 'Network error.';
+            errorDiv.textContent = 'Network error: ' + err.message;
+            console.error('paste failed:', err);
             errorDiv.style.display = 'block';
             submitBtn.disabled = false;
         }

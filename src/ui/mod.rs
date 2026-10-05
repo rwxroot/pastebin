@@ -7,7 +7,10 @@ use askama::Template;
 
 #[derive(Template)]
 #[template(path = "paste.html")]
-struct PasteTemplate;
+struct PasteTemplate {
+    /// Body limit from AppConfig; the size counter reads it.
+    max_size: usize,
+}
 
 #[derive(Template)]
 #[template(path = "fetch.html")]
