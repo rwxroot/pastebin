@@ -383,7 +383,7 @@ mod tests {
 
     #[tokio::test]
     async fn paste_view_escapes_html_in_content() {
-        // User-supplied content must not be injected as raw HTML (XSS).
+        // User supplied content must not be injected as raw HTML (XSS).
         let state = test_state().await;
         let payload = "<script>alert('xss')</script><b>bold</b>";
 
@@ -484,6 +484,7 @@ mod tests {
                 Request::builder()
                     .method("GET")
                     .uri(format!("/api/fetch/{}", id))
+                    .header("accept", "application/json")
                     .body(Body::empty())
                     .unwrap(),
             )

@@ -1,18 +1,40 @@
 use axum::{
     Json,
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode, header::CONTENT_TYPE},
+    response::{IntoResponse, Response},
 };
 use tracing::instrument;
 
 use crate::{schema::fetch::FetchResponse, state::AppState};
 
-#[instrument(name = "GET /api/{id}", skip(state))]
+#[instrument(name = "GET /api/{id}", skip(state, headers))]
 pub async fn fetch(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<FetchResponse>, StatusCode> {
-    let paste = sqlx::query_as!(
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    let paste = get_paste(State(state), Path(id)).await?;
+
+    let wants_json = headers
+        .get(axum::http::header::ACCEPT)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|accept| accept.contains("application/json"));
+
+    if wants_json {
+        Ok(Json(paste).into_response())
+    } else {
+        Ok(([(CONTENT_TYPE, "text/plain; charset=utf-8")], paste.content).into_response())
+    }
+}
+
+/// Get a paste from the db, 404 if missing, 500 if the db fails.
+/// Shared by the API handler and the HTML view.
+pub async fn get_paste(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<FetchResponse, StatusCode> {
+    sqlx::query_as!(
         FetchResponse,
         r#"
         SELECT id, content, created_at, expires_at
@@ -27,9 +49,7 @@ pub async fn fetch(
         tracing::error!(%error, "failed to fetch paste");
         StatusCode::INTERNAL_SERVER_ERROR
     })?
-    .ok_or(StatusCode::NOT_FOUND)?;
-
-    Ok(Json(paste))
+    .ok_or(StatusCode::NOT_FOUND)
 }
 
 #[cfg(test)]
@@ -138,6 +158,7 @@ mod tests {
                 Request::builder()
                     .method("GET")
                     .uri(format!("/api/fetch/{id}"))
+                    .header("accept", "application/json")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -168,6 +189,7 @@ mod tests {
                 Request::builder()
                     .method("GET")
                     .uri(format!("/api/fetch/{id}"))
+                    .header("accept", "application/json")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -199,6 +221,7 @@ mod tests {
                 Request::builder()
                     .method("GET")
                     .uri(format!("/api/fetch/{id}"))
+                    .header("accept", "application/json")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -244,5 +267,65 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn fetch_defaults_to_text_plain_without_accept_json() {
+        let state = test_state().await;
+        let router = router(state);
+        let content = "line one\nline two\n";
+
+        let created = create_paste(&router, content, None).await;
+        let id = created["id"].as_str().expect("id").to_string();
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!("/api/fetch/{id}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()["content-type"],
+            "text/plain; charset=utf-8"
+        );
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("failed to read response body");
+        assert_eq!(&body[..], content.as_bytes(), "raw body must match exactly");
+    }
+
+    #[tokio::test]
+    async fn fetch_defaults_to_text_plain_for_wildcard_accept() {
+        let state = test_state().await;
+        let router = router(state);
+
+        let created = create_paste(&router, "curl default", None).await;
+        let id = created["id"].as_str().expect("id").to_string();
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!("/api/fetch/{id}"))
+                    .header("accept", "*/*")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()["content-type"],
+            "text/plain; charset=utf-8"
+        );
     }
 }
