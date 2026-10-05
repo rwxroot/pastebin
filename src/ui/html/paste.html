@@ -52,7 +52,7 @@
         }
     });
 
-    document.getElementById('curl-host').textContent = window.location.host;
+    document.getElementById('curl-host').textContent = window.location.protocol + '//' + window.location.host;
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
