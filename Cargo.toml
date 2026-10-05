@@ -22,7 +22,6 @@ axum = { version = "0.8.9", default-features = false, features = [
 	"tokio",
 	"http1",
 ] }
-chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 dotenvy = { version = "0.15.7", default-features = false }
 nanoid = { version = "0.5.0", default-features = false }
 serde = { version = "1.0.229", default-features = false, features = ["derive"] }
@@ -53,9 +52,6 @@ tracing = { version = "0.1.44", default-features = false, features = [
 tracing-subscriber = { version = "0.3.23", default-features = false, features = [
 	"ansi",
 	"env-filter",
-] }
-validator = { version = "0.21.0", default-features = false, features = [
-	"derive",
 ] }
 
 [dev-dependencies]

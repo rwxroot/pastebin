@@ -1,12 +1,11 @@
 use axum::{Json, extract::State, http::StatusCode};
-use chrono::Utc;
 use tracing::instrument;
-use validator::Validate;
 
 use crate::{
     schema::{
         id::random_id,
         paste::{PasteRequest, PasteResponse},
+        time::now_secs,
     },
     state::AppState,
 };
@@ -20,16 +19,17 @@ pub async fn paste(
     State(state): State<AppState>,
     Json(req): Json<PasteRequest>,
 ) -> Result<(StatusCode, Json<PasteResponse>), StatusCode> {
-    req.validate().map_err(|error| {
-        tracing::warn!(%error, "validation failed");
-        StatusCode::UNPROCESSABLE_ENTITY
-    })?;
+    if req.content.is_empty() {
+        tracing::warn!("validation failed: content must not be empty");
+        return Err(StatusCode::UNPROCESSABLE_ENTITY);
+    }
 
     let id = random_id();
-    let created_at = Utc::now().timestamp();
+    let created_at = now_secs();
     let expires_at = req
         .expires_in
-        .map(|hours| created_at + chrono::Duration::hours(hours).num_seconds());
+        .and_then(|hours| hours.checked_mul(3600))
+        .and_then(|secs| created_at.checked_add(secs));
 
     let paste = sqlx::query_as!(
         PasteResponse,
@@ -55,19 +55,18 @@ pub async fn paste(
 
 #[cfg(test)]
 mod tests {
+    use super::paste;
+    use crate::schema::time::now_secs;
     use axum::{
         Router,
         body::Body,
         http::{Request, StatusCode, header},
         routing::post,
     };
-    use chrono::Utc;
     use serde_json::{Value, json};
     use tower::ServiceExt;
 
     use crate::state::test_state;
-
-    use super::paste;
 
     fn router(state: crate::state::AppState) -> Router {
         Router::new()
@@ -311,7 +310,7 @@ mod tests {
     async fn paste_response_has_valid_expiration() {
         let state = test_state().await;
 
-        let before = Utc::now().timestamp();
+        let before = now_secs();
 
         let response = router(state)
             .oneshot(
@@ -343,7 +342,7 @@ mod tests {
             .as_i64()
             .expect("expires_at should be an i64");
 
-        let after = Utc::now().timestamp();
+        let after = now_secs();
 
         assert!(created_at >= before);
         assert!(created_at <= after);

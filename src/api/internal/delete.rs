@@ -19,7 +19,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_expired_removes_only_expired_rows() {
-        let now = chrono::Utc::now().timestamp();
+        let now = crate::schema::time::now_secs();
         let state = test_state().await;
 
         for (id, created_at, expires_at) in [

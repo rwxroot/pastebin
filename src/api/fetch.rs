@@ -225,8 +225,8 @@ mod tests {
         sqlx::query("INSERT INTO pastes (id, content, created_at, expires_at) VALUES (?, ?, ?, ?)")
             .bind("expired1")
             .bind("already gone")
-            .bind(chrono::Utc::now().timestamp() - 100)
-            .bind(chrono::Utc::now().timestamp() - 50)
+            .bind(crate::schema::time::now_secs() - 100)
+            .bind(crate::schema::time::now_secs() - 50)
             .execute(&state.db)
             .await
             .unwrap();
