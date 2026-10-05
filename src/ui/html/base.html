@@ -55,7 +55,10 @@
         main.centered {
             display: flex;
             flex-direction: column;
-            justify-content: center;
+        }
+
+        main.centered .page {
+            margin: auto 0;
         }
 
         .section {
@@ -210,6 +213,9 @@
         }
 
         .viewer-actions {
+            position: sticky;
+            bottom: 1rem;
+            z-index: 50;
             display: flex;
             flex-direction: column;
             align-items: stretch;
@@ -310,7 +316,9 @@
     </header>
 
     <main class="{% block main_class %}{% endblock %}">
-        {% block content %}{% endblock %}
+        <div class="page">
+            {% block content %}{% endblock %}
+        </div>
     </main>
 
     <footer>
