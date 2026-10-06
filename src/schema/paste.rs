@@ -1,6 +1,7 @@
 use serde::Serialize;
+use sqlx::FromRow;
 
-#[derive(Serialize)]
+#[derive(FromRow, Serialize)]
 pub struct PasteResponse {
     pub id: String,
     pub created_at: i64,

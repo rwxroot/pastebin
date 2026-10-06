@@ -33,15 +33,14 @@ pub async fn get_paste(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<FetchResponse, StatusCode> {
-    sqlx::query_as!(
-        FetchResponse,
+    sqlx::query_as::<_, FetchResponse>(
         r#"
         SELECT id, content, created_at, expires_at
         FROM pastes
         WHERE id = ? AND (expires_at IS NULL OR expires_at > unixepoch())
         "#,
-        id
     )
+    .bind(id)
     .fetch_optional(&state.db)
     .await
     .map_err(|error| {

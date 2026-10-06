@@ -97,18 +97,17 @@ async fn insert_paste(
         .and_then(|hours| hours.checked_mul(3600))
         .and_then(|secs| created_at.checked_add(secs));
 
-    let paste = sqlx::query_as!(
-        PasteResponse,
+    let paste = sqlx::query_as::<_, PasteResponse>(
         r#"
         INSERT INTO pastes (id, content, created_at, expires_at)
         VALUES (?, ?, ?, ?)
         RETURNING id, created_at, expires_at
         "#,
-        id,
-        content,
-        created_at,
-        expires_at,
     )
+    .bind(id)
+    .bind(content)
+    .bind(created_at)
+    .bind(expires_at)
     .fetch_one(db)
     .await
     .map_err(|error| {

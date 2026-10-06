@@ -1,6 +1,7 @@
 use serde::Serialize;
+use sqlx::FromRow;
 
-#[derive(Serialize)]
+#[derive(FromRow, Serialize)]
 pub struct FetchResponse {
     pub id: String,
     pub content: String,

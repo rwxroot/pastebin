@@ -22,7 +22,9 @@ pub async fn get_shared_state(config: AppConfig) -> Result<AppState> {
     Ok(shared_state)
 }
 
-/// Test helper: returns an `AppState` backed by fresh in-memory SQLite
+/// Test helper
+///
+/// Returns an `AppState` backed by fresh in-memory SQLite
 /// with migrations applied, so tests don't hit the real database.
 #[cfg(test)]
 pub async fn test_state() -> AppState {
@@ -32,16 +34,18 @@ pub async fn test_state() -> AppState {
         .await
         .expect("failed to open in-memory sqlite");
 
-    dotenvy::dotenv().ok();
-
     sqlx::migrate!("./src/db/migrations")
         .run(&db)
         .await
         .expect("failed to run migrations");
 
-    let mut config = AppConfig::load().expect("failed to load config");
-    // Tests send no proxy IP headers, so disable rate limiting to avoid 429s.
-    config.rate_limit = false;
-
-    AppState { db, config }
+    AppState {
+        db,
+        config: AppConfig {
+            port: 2729,
+            host: "0.0.0.0".into(),
+            max_paste_size: 65536,
+            rate_limit: false,
+        },
+    }
 }

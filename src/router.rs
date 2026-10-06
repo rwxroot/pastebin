@@ -96,6 +96,7 @@ pub fn get_router(state: AppState) -> Router {
             .key_extractor(SmartIpKeyExtractor)
             .finish()
             .expect("invalid rate limit config");
+
         return router.layer(GovernorLayer::new(governor)).with_state(state);
     }
 
