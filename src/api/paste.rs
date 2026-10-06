@@ -39,7 +39,7 @@ pub async fn paste(
     let host = headers
         .get(axum::http::header::HOST)
         .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
+        .unwrap_or("http-client-sent-no-host-header-what-were-you-expecting");
 
     Ok((
         StatusCode::CREATED,
