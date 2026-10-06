@@ -36,10 +36,13 @@
 
     const humanSize = (b) => (b >= 1024 ? `${(b / 1024).toFixed(1)} KB` : `${b} B`);
 
+	// The server caps the whole request body (envelope + escaping included)
+	// so the counter is a close approximation, not exact.
     const updateCount = () => {
         const bytes = new Blob([textarea.value]).size;
         counter.textContent = `${humanSize(bytes)} / ${humanSize(MAX_BYTES)}`;
         counter.classList.toggle('warn', bytes > MAX_BYTES * 0.9);
+        submitBtn.disabled = bytes > MAX_BYTES;
     };
     textarea.addEventListener('input', updateCount);
     // bfcache restores text without input events; recount when the page shows
@@ -59,26 +62,29 @@
         submitBtn.disabled = true;
         errorDiv.style.display = 'none';
 
-        const content = form.content.value;
-        const expiry = form.expires_in.value; // already in hours
-
-        const body = { content };
-        if (expiry) body.expires_in = Number(expiry);
+        const body = { content: form.content.value };
+        if (form.expires_in.value) body.expires_in = Number(form.expires_in.value); // hours
 
         try {
             const response = await fetch('/api/paste', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify(body)
+                body: JSON.stringify(body),
             });
 
             if (response.ok) {
                 const data = await response.json();
                 window.location.href = '/fetch/' + data.id;
             } else {
-                errorDiv.textContent = 'Failed to create paste.';
+                const FAIL_MESSAGE = {
+                    413: `Paste exceeds the ${humanSize(MAX_BYTES)} limit.`,
+                    429: 'Slow down and try again.',
+                    500: 'Server error, try again.',
+                };
+                errorDiv.textContent = FAIL_MESSAGE[response.status]
+                    || `Failed to create paste (${response.status}).`;
                 errorDiv.style.display = 'block';
-                submitBtn.disabled = false;
+                updateCount();
             }
         } catch (err) {
             errorDiv.textContent = 'Network error: ' + err.message;
