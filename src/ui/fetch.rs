@@ -18,7 +18,7 @@ pub async fn paste(
     Path(id): Path<String>,
     state: State<AppState>,
 ) -> Result<Html<String>, (StatusCode, Html<String>)> {
-    match fetch::get_paste(state, Path(id.clone())).await {
+    match fetch::get_paste(state, Path(id)).await {
         Ok(paste) => Ok(Html(
             FetchTemplate {
                 id: &paste.id,

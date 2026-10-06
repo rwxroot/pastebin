@@ -54,7 +54,6 @@ pub fn get_router(state: AppState) -> Router {
     let propagate_request_id_layer = PropagateRequestIdLayer::x_request_id();
 
     // Compression
-    // TODO Check if this shit actually works
     let compression_layer = CompressionLayer::new();
 
     // Disable caching

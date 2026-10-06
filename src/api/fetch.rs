@@ -8,7 +8,7 @@ use tracing::instrument;
 
 use crate::{schema::fetch::FetchResponse, state::AppState};
 
-#[instrument(name = "GET /api/{id}", skip(state, headers))]
+#[instrument(name = "GET /api/fetch/{id}", skip(state, headers))]
 pub async fn fetch(
     State(state): State<AppState>,
     Path(id): Path<String>,
